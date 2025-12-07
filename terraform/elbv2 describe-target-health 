@@ -1,0 +1,110 @@
+{
+    "service": {
+        "serviceArn": "arn:aws:ecs:eu-central-1:075213882639:service/ecs-bluegreen-cluster/green-service",
+        "serviceName": "green-service",
+        "clusterArn": "arn:aws:ecs:eu-central-1:075213882639:cluster/ecs-bluegreen-cluster",
+        "loadBalancers": [
+            {
+                "targetGroupArn": "arn:aws:elasticloadbalancing:eu-central-1:075213882639:targetgroup/green-tg/cf0eab381e56e171",
+                "containerName": "green-app",
+                "containerPort": 80
+            }
+        ],
+        "serviceRegistries": [],
+        "status": "ACTIVE",
+        "desiredCount": 1,
+        "runningCount": 0,
+        "pendingCount": 0,
+        "launchType": "FARGATE",
+        "platformVersion": "LATEST",
+        "platformFamily": "Linux",
+        "taskDefinition": "arn:aws:ecs:eu-central-1:075213882639:task-definition/green-task:6",
+        "deploymentConfiguration": {
+            "deploymentCircuitBreaker": {
+                "enable": false,
+                "rollback": false
+            },
+            "maximumPercent": 200,
+            "minimumHealthyPercent": 100,
+            "strategy": "ROLLING",
+            "bakeTimeInMinutes": 0
+        },
+        "deployments": [
+            {
+                "id": "ecs-svc/9369435508392990869",
+                "status": "PRIMARY",
+                "taskDefinition": "arn:aws:ecs:eu-central-1:075213882639:task-definition/green-task:6",
+                "desiredCount": 0,
+                "pendingCount": 0,
+                "runningCount": 0,
+                "failedTasks": 0,
+                "createdAt": "2025-12-07T16:43:11.339000+01:00",
+                "updatedAt": "2025-12-07T16:43:35.529000+01:00",
+                "launchType": "FARGATE",
+                "platformVersion": "1.4.0",
+                "platformFamily": "Linux",
+                "networkConfiguration": {
+                    "awsvpcConfiguration": {
+                        "subnets": [
+                            "subnet-035335a2e5430a372",
+                            "subnet-07ca2e6baf0e68a08"
+                        ],
+                        "securityGroups": [
+                            "sg-0c251ca6431ca0b5f"
+                        ],
+                        "assignPublicIp": "ENABLED"
+                    }
+                },
+                "rolloutState": "COMPLETED",
+                "rolloutStateReason": "ECS deployment ecs-svc/9369435508392990869 completed."
+            }
+        ],
+        "roleArn": "arn:aws:iam::075213882639:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+        "events": [
+            {
+                "id": "32ca56a1-fd4c-43d3-9ac3-bdf6598462f9",
+                "createdAt": "2025-12-07T16:43:24.633000+01:00",
+                "message": "(service green-service) has reached a steady state."
+            },
+            {
+                "id": "54c19bee-aeef-4ed1-8763-0484f7bb2298",
+                "createdAt": "2025-12-07T16:43:24.632000+01:00",
+                "message": "(service green-service) (deployment ecs-svc/9369435508392990869) deployment completed."
+            }
+        ],
+        "createdAt": "2025-12-07T16:43:11.339000+01:00",
+        "currentServiceRevisions": [
+            {
+                "arn": "arn:aws:ecs:eu-central-1:075213882639:service-revision/ecs-bluegreen-cluster/green-service/9369435508392990869",
+                "requestedTaskCount": 0,
+                "runningTaskCount": 0,
+                "pendingTaskCount": 0
+            }
+        ],
+        "placementConstraints": [],
+        "placementStrategy": [],
+        "networkConfiguration": {
+            "awsvpcConfiguration": {
+                "subnets": [
+                    "subnet-035335a2e5430a372",
+                    "subnet-07ca2e6baf0e68a08"
+                ],
+                "securityGroups": [
+                    "sg-0c251ca6431ca0b5f"
+                ],
+                "assignPublicIp": "ENABLED"
+            }
+        },
+        "healthCheckGracePeriodSeconds": 0,
+        "schedulingStrategy": "REPLICA",
+        "deploymentController": {
+            "type": "ECS"
+        },
+        "createdBy": "arn:aws:iam::075213882639:user/Khris",
+        "enableECSManagedTags": false,
+        "propagateTags": "NONE",
+        "enableExecuteCommand": false,
+        "availabilityZoneRebalancing": "DISABLED",
+        "resourceManagementType": "CUSTOMER"
+    }
+}
