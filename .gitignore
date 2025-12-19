@@ -1,8 +1,12 @@
 # Local .terraform directories
 **/.terraform/*
 
-# .tfstate files
+
+# Terraform
+.terraform/
 *.tfstate
+*.tfstate.*
+.terraform.lock.hcl
 *.tfstate.*
 
 # Crash log files
