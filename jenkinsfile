@@ -1,0 +1,240 @@
+pipeline {
+    agent any
+    
+    environment {
+        AWS_REGION = 'eu-central-1'
+        TF_DIR = 'terraform'
+        APPDIR = 'terraform\\app'  # app is inside terraform folder
+    }
+    
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['init', 'plan', 'apply', 'destroy'],
+            description: 'Terraform action'
+        )
+        string(
+            name: 'DOCKER_IMAGE',
+            defaultValue: 'nginx:latest',
+            description: 'Docker image for ECS'
+        )
+        choice(
+            name: 'ACTIVE_COLOR',
+            choices: ['blue', 'green'],
+            description: 'Active deployment color',
+            defaultValue: 'blue'
+        )
+    }
+    
+    stages {
+        stage('Clone Repository') {
+            steps {
+                bat '''
+                echo Cleaning workspace...
+                cd /d %WORKSPACE%
+                
+                echo Cloning repository...
+                git clone https://github.com/Chrisblurp/Blue-Green-Deploy.git .
+                
+                echo Repository structure:
+                dir /B
+                echo.
+                echo Terraform folder contents:
+                dir terraform /B
+                echo.
+                echo App folder contents:
+                dir terraform\\app /B 2>nul || echo "No app folder found"
+                '''
+            }
+        }
+        
+        stage('Terraform Init') {
+            steps {
+                dir('terraform') {
+                    bat '''
+                    echo ===== TERRAFORM INIT =====
+                    terraform init -upgrade
+                    echo ✅ Terraform initialized
+                    '''
+                }
+            }
+        }
+        
+        stage('Terraform Validate') {
+            steps {
+                dir('terraform') {
+                    bat '''
+                    echo ===== VALIDATING CONFIGURATION =====
+                    terraform validate
+                    echo ✅ Configuration is valid
+                    '''
+                }
+            }
+        }
+        
+        stage('Terraform Action') {
+            steps {
+                dir('terraform') {
+                    script {
+                        if (params.ACTION == 'plan') {
+                            bat """
+                            echo ===== TERRAFORM PLAN =====
+                            terraform plan ^
+                              -var="docker_image=${params.DOCKER_IMAGE}" ^
+                              -var="active_color=${params.ACTIVE_COLOR}"
+                            echo ===== PLAN COMPLETE =====
+                            """
+                        } else if (params.ACTION == 'apply') {
+                            bat """
+                            echo ===== APPLYING INFRASTRUCTURE =====
+                            terraform apply -auto-approve ^
+                              -var="docker_image=${params.DOCKER_IMAGE}" ^
+                              -var="active_color=${params.ACTIVE_COLOR}"
+                            echo ===== INFRASTRUCTURE DEPLOYED =====
+                            """
+                        } else if (params.ACTION == 'destroy') {
+                            bat """
+                            echo ===== DESTROYING INFRASTRUCTURE =====
+                            terraform destroy -auto-approve
+                            echo ===== INFRASTRUCTURE DESTROYED =====
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Get Deployment Info') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
+            steps {
+                dir('terraform') {
+                    script {
+                        // Get ALB DNS
+                        def albDns = bat(
+                            script: '''
+                            @echo off
+                            for /f "tokens=*" %%i in ('terraform output -raw alb_dns_name 2^>nul') do (
+                                echo %%i
+                            )
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (albDns) {
+                            echo "========================================"
+                            echo "🎉 DEPLOYMENT SUCCESSFUL!"
+                            echo "🌐 Application URL: http://${albDns}/"
+                            echo "🐳 Docker Image: ${params.DOCKER_IMAGE}"
+                            echo "🎨 Active Color: ${params.ACTIVE_COLOR}"
+                            echo "========================================"
+                            
+                            env.ALB_DNS = albDns
+                        } else {
+                            echo "⚠️ ALB DNS not available in outputs yet"
+                        }
+                        
+                        // Get other outputs if needed
+                        bat '''
+                        echo === Terraform Outputs ===
+                        terraform output
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Task Definition') {
+            when {
+                expression { 
+                    params.ACTION == 'apply' && 
+                    fileExists('terraform\\app\\taskdef.json') 
+                }
+            }
+            steps {
+                script {
+                    echo "📦 Found taskdef.json, deploying ECS task definition..."
+                    
+                    // Check taskdef.json exists
+                    bat '''
+                    echo Checking for taskdef.json...
+                    dir terraform\\app
+                    '''
+                    
+                    // Read and display taskdef content
+                    def taskdefContent = readFile 'terraform\\app\\taskdef.json'
+                    echo "Task Definition content (first 500 chars):"
+                    echo taskdefContent.take(500) + "..."
+                    
+                    // Register task definition
+                    bat """
+                    echo Registering ECS task definition...
+                    aws ecs register-task-definition ^
+                      --cli-input-json file://terraform/app/taskdef.json ^
+                      --region ${AWS_REGION}
+                      
+                    echo ✅ Task definition registered
+                    """
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            when {
+                expression { 
+                    params.ACTION == 'apply' && 
+                    env.ALB_DNS 
+                }
+            }
+            steps {
+                script {
+                    echo "🩺 Performing health check on ALB..."
+                    
+                    powershell """
+                    `$url = 'http://${env.ALB_DNS}/'
+                    Write-Host "Testing: `$url"
+                    
+                    try {
+                        `$response = Invoke-WebRequest -Uri `$url -UseBasicParsing -TimeoutSec 20
+                        Write-Host "✅ Health check PASSED - Status: `$(`$response.StatusCode)" -ForegroundColor Green
+                        
+                        # Check if it's nginx
+                        if (`$response.Content -match "Welcome to nginx") {
+                            Write-Host "✅ Confirmed: nginx is serving traffic" -ForegroundColor Green
+                        }
+                    } catch {
+                        Write-Host "❌ Health check FAILED: `$($_.Exception.Message)" -ForegroundColor Red
+                        Write-Host "⚠️ This is normal if ALB is still provisioning. Try again in 2-3 minutes."
+                    }
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "========================================"
+            echo "Build Summary:"
+            echo "Status: ${currentBuild.currentResult}"
+            echo "Action: ${params.ACTION}"
+            echo "Image: ${params.DOCKER_IMAGE}"
+            echo "Color: ${params.ACTIVE_COLOR}"
+            echo "Build: #${env.BUILD_NUMBER}"
+            echo "========================================"
+            
+            // Archive Terraform plan if it exists
+            archiveArtifacts artifacts: 'terraform/*.tfplan', allowEmptyArchive: true
+        }
+        success {
+            echo '✅ Pipeline completed successfully!'
+            
+            // Add to build description for easy reference
+            currentBuild.description = "${params.ACTION} | ${params.DOCKER_IMAGE} | ${params.ACTIVE_COLOR}"
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
+}

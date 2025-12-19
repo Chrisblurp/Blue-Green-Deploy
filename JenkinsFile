@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('aws-access-key')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
+        AWS_DEFAULT_REGION    = 'eu-central-1'
+    }
+
+    stages {
+
+        stage('Checkout Repository') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/Chrisblurp/Blue-Green-Deploy.git']]
+                ])
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                powershell """
+                    cd terraform
+                    terraform init -input=false
+                """
+            }
+        }
+
+        stage('Terraform Format & Validate') {
+            steps {
+                powershell """
+                    cd terraform
+                    terraform fmt -check
+                    terraform validate
+                """
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                powershell """
+                    cd terraform
+                    terraform plan -out=tfplan
+                """
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                powershell """
+                    cd terraform
+                    terraform apply -auto-approve
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Terraform Blue/Green ECS deployment completed successfully!"
+        }
+        failure {
+            echo "Deployment failed. Check Jenkins logs for details."
+        }
+    }
+}
